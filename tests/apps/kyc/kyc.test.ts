@@ -10,6 +10,7 @@ import { POST as notesRoute } from "@/app/api/kyc/cases/[id]/notes/route";
 import { POST as proposeRoute } from "@/app/api/kyc/cases/[id]/propose/route";
 import { GET as listRoute } from "@/app/api/kyc/cases/route";
 import { kycDecisions, kycNotes } from "@/apps/kyc/schema";
+import { approvals as approvalsTable } from "@/platform/db/schema";
 import { claimKycCase, escalateKycCase } from "@/apps/kyc/service";
 import { audit } from "@/platform/audit";
 import { getDb } from "@/platform/db/client";
@@ -170,6 +171,30 @@ describe("KYC review queue", () => {
     expect(decisions.at(-1)).toMatchObject({ status: "rejected" });
     await propose(row.id, users.kycReviewer, "approve");
     expect(await pendingDecision(row.id)).toMatchObject({ status: "pending" });
+  });
+
+  it("INV-9: compliance can't decide a decision that completed without approval", async () => {
+    const row = await insertKycCase({ riskLevel: "low" });
+    await claim(row.id, users.kycReviewer);
+    await propose(row.id, users.kycReviewer, "approve");
+    expect(await kycCaseRow(row.id)).toMatchObject({ status: "approved" });
+
+    const approve = await decide(row.id, users.compliance, "approve");
+    expect(approve.status).toBe(409);
+    expect(await responseBody(approve)).toMatchObject({ error: "case_not_actionable" });
+    const reject = await decide(row.id, users.compliance, "reject", "Trying to undo");
+    expect(reject.status).toBe(409);
+    expect(await responseBody(reject)).toMatchObject({ error: "case_not_actionable" });
+
+    expect(await kycCaseRow(row.id)).toMatchObject({ status: "approved" });
+    const [decision] = await getDb().select().from(kycDecisions).where(eq(kycDecisions.caseId, row.id));
+    expect(decision).toMatchObject({ status: "approved", requiredApprovals: 0 });
+    expect(
+      await getDb()
+        .select()
+        .from(approvalsTable)
+        .where(and(eq(approvalsTable.entityType, "kyc_decision"), eq(approvalsTable.entityId, decision!.id))),
+    ).toHaveLength(0);
   });
 
   it("INV-9: a case can have only one pending decision", async () => {

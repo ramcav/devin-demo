@@ -430,8 +430,11 @@ export async function decideKycProposal(
       .orderBy(asc(kycDecisions.createdAt), asc(kycDecisions.id));
     // The pending proposal is the subject when there is one; otherwise the most recent proposal is
     // passed to the engine so it can deny repeat or late decisions (already_decided / not_pending).
+    // Decisions that completed without approval (requiredApprovals 0) were never engine subjects:
+    // there is nothing left to decide on them.
     const pending = decisions.find((d) => d.status === "pending");
-    const subject = pending ?? decisions[decisions.length - 1];
+    const latest = decisions[decisions.length - 1];
+    const subject = pending ?? (latest?.requiredApprovals === 1 ? latest : undefined);
     if (!subject) throw caseNotActionable();
     const state = await approvals.decide(
       tx,
