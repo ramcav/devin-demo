@@ -11,6 +11,7 @@ Read this before every session in this repo. `SPEC.md` is the source of truth fo
 5. **Synthetic data only.** No real names, IDs or card numbers. Cards are payment method tokens (`pm_…`) plus last4; never store or render a full card number.
 6. **Masking and confidentiality are enforced in the data layer**, not only in components: API responses for unauthorized roles must not contain unmasked national IDs or escalation data.
 7. **Talk to external systems only through ports** (see Architecture below), never by calling an API directly from app code.
+8. **Decisions and enums from user input are parsed strictly; anything unknown fails closed.** Use `parseDecision()` from `src/platform/decisions.ts` for approve/reject (a missing or unknown value is a 400, never a default), and validate other enums against their value lists.
 
 ## Architecture
 

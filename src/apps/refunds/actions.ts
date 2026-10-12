@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { parseDecision } from "@/platform/decisions";
 import { parseMoneyToCents } from "@/platform/format";
 import { runAction } from "@/platform/session";
 import { createRefund, decideRefund, retryRefundPayment } from "./service";
@@ -21,8 +22,7 @@ export async function createRefundAction(_prev: FormState, formData: FormData): 
 
 export async function decideRefundAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const id = String(formData.get("id") ?? "");
-  const decision = formData.get("decision") === "reject" ? "reject" : "approve";
-  const res = await runAction((user) => decideRefund(user, id, decision, String(formData.get("reason") ?? "")));
+  const res = await runAction((user) => decideRefund(user, id, parseDecision(formData.get("decision")), String(formData.get("reason") ?? "")));
   if (!res.ok) return { error: res.error };
   revalidatePath(`/refunds/${id}`);
   return { message: `Refund is now ${res.value.status.replace("_", " ")}` };
