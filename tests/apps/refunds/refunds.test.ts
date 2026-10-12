@@ -1,11 +1,13 @@
-import { and, asc, eq, gte, notInArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, notInArray } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { POST as approveRoute } from "@/app/api/refunds/[id]/approve/route";
 import { GET as getRefundRoute } from "@/app/api/refunds/[id]/route";
+import { GET as exportRoute } from "@/app/api/refunds/export/route";
 import { POST as createRoute, GET as listRoute } from "@/app/api/refunds/route";
 import { charges, refundRequests } from "@/apps/refunds/schema";
-import { createRefund, decideRefund, retryRefundPayment } from "@/apps/refunds/service";
+import { createRefund, decideRefund, exportRefunds, retryRefundPayment } from "@/apps/refunds/service";
 import { getDb } from "@/platform/db/client";
+import { auditLog } from "@/platform/db/schema";
 import { ApprovalDeniedError, ForbiddenError, ValidationError } from "@/platform/errors";
 import { getPayments, ProviderUnavailable } from "@/platform/payments";
 import { apiRequest, auditRowsFor, routeCtx, users } from "../../helpers";
@@ -258,6 +260,137 @@ describe("refunds", () => {
     it("INV-8: kyc reviewers and admins can't create refunds", async () => {
       for (const u of [users.kycReviewer, users.admin, users.compliance]) {
         await expect(createRefund(u, { chargeId: "ch_0030", amountCents: 100, reason: "x" })).rejects.toBeInstanceOf(ForbiddenError);
+      }
+    });
+  });
+
+  describe("CSV export", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+
+    function parseCsv(text: string): string[][] {
+      const rows: string[][] = [];
+      let row: string[] = [];
+      let cell = "";
+      let quoted = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i]!;
+        if (quoted) {
+          if (c === '"' && text[i + 1] === '"') {
+            cell += '"';
+            i++;
+          } else if (c === '"') quoted = false;
+          else cell += c;
+        } else if (c === '"') quoted = true;
+        else if (c === ",") {
+          row.push(cell);
+          cell = "";
+        } else if (c === "\r" && text[i + 1] === "\n") {
+          row.push(cell);
+          rows.push(row);
+          row = [];
+          cell = "";
+          i++;
+        } else cell += c;
+      }
+      return rows;
+    }
+
+    async function download(asUser: string | undefined, query: string) {
+      const res = await exportRoute(await apiRequest(`/api/refunds/export?${query}`, { asUser }), routeCtx({}));
+      return res;
+    }
+
+    async function exportedRows(asUser: string, query: string): Promise<Record<string, string>[]> {
+      const res = await download(asUser, query);
+      expect(res.status).toBe(200);
+      const [header, ...rows] = parseCsv((await res.text()).replace(/^\uFEFF/, ""));
+      return rows.map((r) => Object.fromEntries(header!.map((h, i) => [h, r[i] ?? ""])));
+    }
+
+    it("an approver downloads refunds with requester, both approvers, paid date and decimal amount", async () => {
+      const r = await createRefund(users.requester, { chargeId: await freshCharge(60_000), amountCents: 60_050, reason: "Month-end, item lost" });
+      await decideRefund(users.approverA, r.id, "approve");
+      await decideRefund(users.approverB, r.id, "approve");
+
+      const res = await download(users.approverC.id, `from=${today}&to=${today}`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+      expect(res.headers.get("content-disposition")).toBe(`attachment; filename="refunds_${today}_${today}.csv"`);
+      const text = await res.text();
+      expect(text).not.toContain("pm_");
+
+      const rows = await exportedRows(users.approverC.id, `from=${today}&to=${today}`);
+      const row = rows.find((x) => x.refund_id === r.id);
+      expect(row).toMatchObject({
+        status: "paid",
+        amount: "600.50",
+        currency: "USD",
+        reason: "Month-end, item lost",
+        requested_by: "Rita Requester",
+        approved_by: "Ana Approver; Ben Approver",
+        rejected_by: "",
+        provider_refund_id: expect.stringMatching(/^re_/),
+        paid_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      });
+      expect(Object.keys(row!)).toEqual([
+        "refund_id", "created_at", "paid_at", "status", "amount", "currency", "reason",
+        "requested_by", "approved_by", "rejected_by", "charge_id", "provider_refund_id",
+      ]);
+    });
+
+    it("an auditor can download; rejections show who rejected; status and date filters apply", async () => {
+      const r = await createRefund(users.requester2, { chargeId: await freshCharge(70_000), amountCents: 70_000, reason: "Not delivered" });
+      await decideRefund(users.approverA, r.id, "approve");
+      await decideRefund(users.approverB, r.id, "reject", "Delivered per carrier");
+
+      const rejected = await exportedRows(users.auditor.id, `from=${today}&to=${today}&status=rejected`);
+      expect(rejected.find((x) => x.refund_id === r.id)).toMatchObject({ approved_by: "Ana Approver", rejected_by: "Ben Approver", paid_at: "" });
+      expect(rejected.every((x) => x.status === "rejected")).toBe(true);
+
+      expect((await exportedRows(users.auditor.id, `from=${today}&to=${today}&status=paid`)).some((x) => x.refund_id === r.id)).toBe(false);
+      expect((await exportedRows(users.auditor.id, `from=${yesterday}&to=${yesterday}`)).some((x) => x.refund_id === r.id)).toBe(false);
+    });
+
+    it("free-text reasons can't inject spreadsheet formulas", async () => {
+      const r = await createRefund(users.requester, { chargeId: await freshCharge(1_000), amountCents: 1_000, reason: '=HYPERLINK("http://evil.test","x")' });
+      const res = await download(users.auditor.id, `from=${today}&to=${today}`);
+      const text = await res.text();
+      expect(text).toContain(`"'=HYPERLINK(""http://evil.test"",""x"")"`);
+      const row = (await exportedRows(users.auditor.id, `from=${today}&to=${today}`)).find((x) => x.refund_id === r.id);
+      expect(row!.reason).toBe(`'=HYPERLINK("http://evil.test","x")`);
+    });
+
+    it("each export writes one refund.exported audit row with the filters and row count, not the data", async () => {
+      const { rows } = await exportRefunds(users.approverB, { from: yesterday, to: today, status: "pending" });
+      const [last] = await getDb()
+        .select()
+        .from(auditLog)
+        .where(and(eq(auditLog.action, "refund.exported"), eq(auditLog.actorId, users.approverB.id)))
+        .orderBy(desc(auditLog.id))
+        .limit(1);
+      expect(last).toMatchObject({ actorRole: "approver", entityType: "refund_export", after: { from: yesterday, to: today, status: "pending", rowCount: rows.length } });
+      expect(last!.entityId).toMatch(/^rx_/);
+    });
+
+    it("INV-8: a requester gets 403 downloading the CSV via the API, and the denial is audited", async () => {
+      const res = await download(users.requester.id, `from=${today}&to=${today}`);
+      expect(res.status).toBe(403);
+      const rows = await auditRowsFor("action", "refund.export");
+      expect(rows.at(-1)).toMatchObject({ action: "authz.denied", actorId: users.requester.id });
+    });
+
+    it("INV-8: only approvers and auditors can export; no session gets 401", async () => {
+      for (const u of [users.requester2, users.kycReviewer, users.compliance, users.admin]) {
+        await expect(exportRefunds(u, { from: today, to: today })).rejects.toBeInstanceOf(ForbiddenError);
+      }
+      expect((await download(undefined, `from=${today}&to=${today}`)).status).toBe(401);
+    });
+
+    it("requires a valid from/to date range", async () => {
+      for (const q of ["", `from=${today}`, "from=2026-02-30&to=2026-03-01", "from=2026-03-02&to=2026-03-01", "from=03/01/2026&to=2026-03-02", "from=2026-03-01&to=2026-03-02&status=bogus"]) {
+        const res = await download(users.auditor.id, q);
+        expect(res.status, q).toBe(400);
       }
     });
   });

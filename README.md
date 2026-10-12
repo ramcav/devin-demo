@@ -42,10 +42,10 @@ npm run test:e2e                                # Playwright; reuses a server on
 | User | Role | In this prototype |
 | --- | --- | --- |
 | Rita Requester, Ravi Requester | `requester` | Create refund requests; see only their own |
-| Ana, Ben, Cleo Approver | `approver` | Create refunds and approve/reject other people's refunds |
+| Ana, Ben, Cleo Approver | `approver` | Create refunds, approve/reject other people's refunds, export refunds CSV |
 | Kim Reviewer, Kai Reviewer | `kyc_reviewer` | Claim and work KYC review cases; propose decisions; escalate to compliance |
 | Cora Compliance, Cyd Compliance | `compliance` | KYC second approvals and escalations; audit page |
-| Aldo Auditor | `auditor` | Read-only: every refund and the audit page |
+| Aldo Auditor | `auditor` | Read-only: every refund, refunds CSV export and the audit page |
 | Ada Admin | `admin` | Manage users and roles (no UI yet) |
 
 Permissions live in one file, [`src/platform/policy.ts`](src/platform/policy.ts) (default deny).
@@ -61,6 +61,8 @@ Permissions live in one file, [`src/platform/policy.ts`](src/platform/policy.ts)
 ## Refunds app (`src/apps/refunds/`)
 
 Requester or approver picks a charge, enters amount and reason → `pending` → approvers approve/reject → when fully approved the platform calls the payments port and the refund becomes `paid` (or `payment_failed`, retryable by an approver with the same idempotency key). Refunds of $500 or less need 1 approval, over $500 need 2. The refundable balance counts pending, approved, paid and failed-payment refunds. Cards are only shown as `•••• 4242`; refunds always go to the charge's original payment method token.
+
+**CSV export (month-end close):** approvers and auditors (`refund.export`) get a "Download CSV" form on `/refunds` → `GET /api/refunds/export?from=YYYY-MM-DD&to=YYYY-MM-DD[&status=]`. Rows are refunds *created* in the inclusive UTC date range, optionally one status. Columns: `refund_id, created_at, paid_at, status, amount, currency, reason, requested_by, approved_by, rejected_by, charge_id, provider_refund_id` (approver names `;`-separated in decision order). No customer name, card or payment method token. Formula-like cells (`= + - @`) are prefixed with `'` (CSV injection). Every export writes one `refund.exported` audit row (filters + row count, no row data) in the same transaction as the read; other roles get 403, audited as `authz.denied`.
 
 ## KYC review queue (`src/apps/kyc/`)
 

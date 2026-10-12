@@ -7,6 +7,7 @@ import { requirePageUser } from "@/platform/session";
 import { DataGrid } from "@/platform/ui/data-grid";
 import { Forbidden } from "@/platform/ui/forbidden";
 import { listRefunds, refundGridSpec, refundStatuses } from "../service";
+import { ExportForm } from "../ui/export-form";
 import { StatusBadge } from "../ui/status-badge";
 
 export default async function RefundsListPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -29,6 +30,7 @@ export default async function RefundsListPage({ searchParams }: { searchParams: 
           </Link>
         )}
       </div>
+      {can(user, "refund.export") && <ExportForm status={params.filters.status} />}
       <DataGrid
         basePath="/refunds"
         params={params}
