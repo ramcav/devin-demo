@@ -9,6 +9,7 @@ async function signInAs(page: Page, name: string) {
 
 test("requesters can't export; the auditor downloads the refunds CSV", async ({ page }) => {
   const today = new Date().toISOString().slice(0, 10);
+  const from = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
   const reason = `Month-end export check ${Date.now()} (synthetic)`;
 
   // A requester raises a refund, sees no export form and is refused by the API.
@@ -19,7 +20,7 @@ test("requesters can't export; the auditor downloads the refunds CSV", async ({ 
   const refundId = (await created.json()).id as string;
   await page.goto("/refunds");
   await expect(page.getByTestId("refund-export")).toHaveCount(0);
-  const denied = await page.request.get(`/api/refunds/export?from=2020-01-01&to=${today}`);
+  const denied = await page.request.get(`/api/refunds/export?from=${from}&to=${today}`);
   expect(denied.status()).toBe(403);
   await page.getByRole("button", { name: "Sign out" }).click();
 
@@ -27,12 +28,12 @@ test("requesters can't export; the auditor downloads the refunds CSV", async ({ 
   await signInAs(page, "Aldo Auditor");
   await page.goto("/refunds");
   const form = page.getByTestId("refund-export");
-  await form.getByLabel("Created from (UTC)").fill("2020-01-01");
+  await form.getByLabel("Created from (UTC)").fill(from);
   await form.getByLabel("Created to (UTC)").fill(today);
   const downloadPromise = page.waitForEvent("download");
   await form.getByRole("button", { name: "Download CSV" }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe(`refunds_2020-01-01_${today}.csv`);
+  expect(download.suggestedFilename()).toBe(`refunds_${from}_${today}.csv`);
   const csv = (await readFile((await download.path())!, "utf8")).replace(/^\uFEFF/, "");
   const [header, ...rows] = csv.trimEnd().split("\r\n");
   expect(header).toBe("refund_id,created_at,paid_at,status,amount,currency,reason,requested_by,approved_by,rejected_by,charge_id,provider_refund_id");
