@@ -1,3 +1,4 @@
+import { and, eq, inArray } from "drizzle-orm";
 import { kycCases, kycDecisions, kycNotes, type KycCaseStatus, type KycRiskLevel } from "../src/apps/kyc/schema";
 import { charges } from "../src/apps/refunds/schema";
 import { chargeFixtures } from "../src/platform/adapters/payments/fixtures";
@@ -155,6 +156,16 @@ export async function seedAll(db: Db): Promise<void> {
     }));
   if (complianceApprovals.length) await db.insert(approvalsTable).values(complianceApprovals).onConflictDoNothing();
 
+  const escalatedCaseIds = cases
+    .filter((c) => c.spec.escalate)
+    .map(({ index }) => `kyc_${String(index).padStart(4, "0")}`);
+  const alreadyEscalated = escalatedCaseIds.length
+    ? await db
+        .select({ caseId: kycNotes.caseId })
+        .from(kycNotes)
+        .where(and(inArray(kycNotes.caseId, escalatedCaseIds), eq(kycNotes.kind, "escalation")))
+    : [];
+  const hasEscalationNote = new Set(alreadyEscalated.map((row) => row.caseId));
   const escalationNotes = cases
     .filter((c) => c.spec.escalate)
     .map(({ index, spec }) => ({
@@ -163,6 +174,7 @@ export async function seedAll(db: Db): Promise<void> {
       kind: "escalation" as const,
       body: "Escalated for a second look: possible sanctions-list match (synthetic).",
       createdAt: new Date(BASE + index * day + 5_400_000),
-    }));
+    }))
+    .filter((note) => !hasEscalationNote.has(note.caseId));
   if (escalationNotes.length) await db.insert(kycNotes).values(escalationNotes).onConflictDoNothing();
 }

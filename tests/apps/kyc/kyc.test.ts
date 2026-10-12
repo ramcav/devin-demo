@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { POST as approveRoute } from "@/app/api/kyc/cases/[id]/decision/approve/route";
@@ -267,11 +268,12 @@ describe("KYC review queue", () => {
 
   it("INV-6: KYC audit rows never contain the national ID or date of birth", async () => {
     const row = await insertKycCase({ riskLevel: "medium" });
+    const marker = `Marker ${randomUUID()}`;
     await claim(row.id, users.kycReviewer);
-    await addNote(row.id, users.kycReviewer, "Reviewed source documents");
+    await addNote(row.id, users.kycReviewer, `${marker} ${row.nationalId}`);
     await propose(row.id, users.kycReviewer, "reject", "Name does not match");
     await decide(row.id, users.compliance, "reject", "Reviewed evidence");
-    await escalate(row.id, users.kycReviewer, "Second-level review needed");
+    await escalate(row.id, users.kycReviewer, `${marker} ${row.nationalId}`);
     await propose(row.id, users.compliance, "approve", "Risk resolved");
     const rows = await auditRowsFor(ENTITY, row.id);
     const serialized = JSON.stringify(rows);
@@ -285,6 +287,7 @@ describe("KYC review queue", () => {
     ]);
     expect(serialized).not.toContain(row.nationalId);
     expect(serialized).not.toContain("1984-03-17");
+    expect(serialized).not.toContain(marker);
   });
 
   it("INV-8: GET /api/kyc/cases returns 403 for a requester and an approver", async () => {
@@ -411,6 +414,15 @@ describe("KYC review queue", () => {
     const text = await res.text();
     expect(JSON.parse(text)).toMatchObject({ status: "rejected", decisions: [] });
     expect(text).not.toMatch(/escalated|escalation/i);
+  });
+
+  it("INV-10: the service never selects the full national ID for non-PII actors", () => {
+    const source = readFileSync(new URL("../../../src/apps/kyc/service.ts", import.meta.url), "utf8");
+    // The national_id column may only appear inside nationalIdExpr, which masks it for non-PII actors.
+    const withoutNationalIdExpr = source.replace(/function nationalIdExpr[\s\S]*?\n}/, "");
+    expect(withoutNationalIdExpr).not.toContain("kycCases.nationalId");
+    // No bare .select() may pull whole rows (including national_id) from kyc_cases.
+    expect(source).not.toMatch(/\.select\(\)\s*\n?\s*\.from\(kycCases\)/);
   });
 });
 

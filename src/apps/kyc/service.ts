@@ -97,8 +97,23 @@ const proposeInput = z
   })
   .strict();
 
-type CaseRow = typeof kycCases.$inferSelect;
 type DecisionRow = typeof kycDecisions.$inferSelect;
+
+/**
+ * Every column a caller may read except national_id, which is only ever selected through
+ * nationalIdExpr(actor). Never widen this to the full row.
+ */
+const caseColumns = {
+  id: kycCases.id,
+  customerName: kycCases.customerName,
+  dateOfBirth: kycCases.dateOfBirth,
+  country: kycCases.country,
+  riskLevel: kycCases.riskLevel,
+  status: kycCases.status,
+  assignedTo: kycCases.assignedTo,
+  createdAt: kycCases.createdAt,
+};
+type CaseRow = Omit<typeof kycCases.$inferSelect, "nationalId">;
 
 function validationMessage(err: z.ZodError): string {
   return err.issues.map((i) => (i.code === "unrecognized_keys" ? i.message : `${i.path.join(".")}: ${i.message}`)).join("; ");
@@ -124,7 +139,7 @@ function nationalIdExpr(actor: User) {
 }
 
 /** Whether the actor may perform work on the case right now (assignment or escalation authority). */
-function mayWork(actor: User, row: CaseRow): boolean {
+function mayWork(actor: User, row: Pick<CaseRow, "status" | "assignedTo">): boolean {
   return (
     (row.status === "in_review" && row.assignedTo === actor.id) ||
     (row.status === "escalated" && can(actor, "kyc.escalation.decide"))
@@ -139,8 +154,17 @@ async function pendingDecision(tx: DbOrTx, caseId: string): Promise<DecisionRow 
   return row ?? null;
 }
 
-async function lockCase(tx: Tx, id: string): Promise<CaseRow> {
-  const [row] = await tx.select().from(kycCases).where(eq(kycCases.id, id)).for("update");
+async function lockCase(tx: Tx, id: string) {
+  const [row] = await tx
+    .select({
+      id: kycCases.id,
+      status: kycCases.status,
+      assignedTo: kycCases.assignedTo,
+      riskLevel: kycCases.riskLevel,
+    })
+    .from(kycCases)
+    .where(eq(kycCases.id, id))
+    .for("update");
   if (!row) throw new NotFoundError("Case not found");
   return row;
 }
@@ -159,7 +183,7 @@ function summaryFor(
 }
 
 const selectForActor = (actor: User) => ({
-  kyc: kycCases,
+  kyc: caseColumns,
   displayedStatus: statusExpr(actor),
   nationalId: nationalIdExpr(actor),
   assigneeName: users.name,
@@ -338,7 +362,7 @@ export async function addKycNote(user: User | null, id: string, body: string): P
     return {
       result: { id: note!.id },
       before: { status: row.status },
-      after: { kind, body: trimmed },
+      after: { kind, noteId: note!.id },
     };
   });
 }
@@ -352,11 +376,14 @@ export async function escalateKycCase(user: User | null, id: string, note: strin
     if (!(row.status === "in_review" && row.assignedTo === actor.id)) throw caseNotActionable();
     if (await pendingDecision(tx, id)) throw caseNotActionable();
     await tx.update(kycCases).set({ status: "escalated" }).where(eq(kycCases.id, id));
-    await tx.insert(kycNotes).values({ caseId: id, authorId: actor.id, kind: "escalation", body: trimmed });
+    const [note] = await tx
+      .insert(kycNotes)
+      .values({ caseId: id, authorId: actor.id, kind: "escalation", body: trimmed })
+      .returning();
     return {
       result: summaryFor(actor, id, "escalated", null),
       before: { status: row.status },
-      after: { status: "escalated", note: trimmed },
+      after: { status: "escalated", kind: "escalation", noteId: note!.id },
     };
   });
 }

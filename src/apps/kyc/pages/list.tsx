@@ -23,18 +23,7 @@ export default async function KycListPage({ searchParams }: { searchParams: Prom
   const statusOptions = canViewEscalations ? kycCaseStatuses : kycCaseStatuses.filter((s) => s !== "escalated");
   return (
     <main className="p-8">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">KYC review queue</h1>
-        {params.filters.assignedTo === user.id ? (
-          <Link href="/kyc" className="rounded border px-3 py-1.5 text-sm text-gray-700">
-            Showing my cases — clear
-          </Link>
-        ) : (
-          <Link href={`/kyc?f_assignedTo=${user.id}`} className="rounded border px-3 py-1.5 text-sm text-gray-700">
-            Assigned to me
-          </Link>
-        )}
-      </div>
+      <h1 className="mb-4 text-2xl font-semibold">KYC review queue</h1>
       <DataGrid
         basePath="/kyc"
         params={params}
@@ -43,6 +32,7 @@ export default async function KycListPage({ searchParams }: { searchParams: Prom
           { key: "status", label: "Status", options: statusOptions.map((s) => ({ value: s, label: s.replace("_", " ") })) },
           { key: "riskLevel", label: "Risk", options: kycRiskLevels.map((r) => ({ value: r, label: r })) },
           { key: "customerName", label: "Customer contains" },
+          { key: "assignedTo", label: "Assigned to", options: [{ value: user.id, label: "Me" }] },
         ]}
         columns={[
           { key: "id", label: "Case" },
