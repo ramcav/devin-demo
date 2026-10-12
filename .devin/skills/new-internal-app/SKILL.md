@@ -1,8 +1,15 @@
-# Playbook: build a new internal app on the platform
+---
+name: new-internal-app
+description: Build a new internal tool (e.g. KYC queue, disputes, feature-flag panel) on top of the platform layer, reusing its auth, policy, approvals and audit modules. Use when asked to add or generate a new internal app.
+---
+
+# Skill: build a new internal app on the platform
 
 Use this to add any new internal tool (the KYC queue, disputes, a feature-flag panel, and so on). The app must reuse the platform layer in `src/platform/`; it never implements its own auth, permission checks, approvals or audit writes.
 
 ## Inputs
+
+- Read `.devin/knowledge.md` and `SPEC.md` first; their rules apply to every step below.
 
 - The app's section in `SPEC.md` (entities, statuses, flow, rules, who can do what).
 - `.devin/knowledge.md` (rules and conventions).

@@ -59,9 +59,9 @@ Seed at least: 2 requesters, 2 approvers, 2 KYC reviewers, 1 compliance officer,
   - cards are only ever shown masked (`•••• 4242`).
 - **Mock payments provider:** a small in-repo module or route (`/api/mock-payments/...`) that serves seeded charges and accepts refunds. The app talks to it only through the payments port (`src/platform/ports/payments.ts`), implemented by the mock adapter.
 
-## App 2: KYC review queue (`src/apps/kyc/`): build this with the playbook
+## App 2: KYC review queue (`src/apps/kyc/`): build this with the new-internal-app skill
 
-This app is deliberately specified at the same level of detail a business owner would give. It must be built by following `playbooks/new-internal-app.md`, reusing the platform layer.
+This app is deliberately specified at the same level of detail a business owner would give. It must be built with the `new-internal-app` skill (`.devin/skills/new-internal-app/SKILL.md`), reusing the platform layer.
 
 - **Entities:** `kyc_cases` (id, customer name, date of birth, national ID number, country, risk level `low|medium|high`, status, assigned_to, created_at) and `kyc_notes` (case_id, author, body, created_at).
 - **Statuses:** `new → in_review → approved | rejected | escalated`.

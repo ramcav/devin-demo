@@ -1,8 +1,15 @@
-# Playbook: add an integration (port + adapter)
+---
+name: new-integration
+description: Connect the platform to an external system (auth provider, payments, KYC vendor) as a port with mock and real adapters and shared contract tests. Use when asked to add or replace an integration.
+---
+
+# Skill: add an integration (port + adapter)
 
 Use this to connect the platform to an external system (a payment processor, a KYC vendor, Entra ID, a data warehouse). Apps never call external APIs directly; they use a port, and this playbook adds one.
 
 ## Inputs
+
+- Read `.devin/knowledge.md` and `SPEC.md` first; their rules apply to every step below.
 
 - What the apps need from the system, in domain terms (for example: "issue a refund to the original payment method", "fetch a customer's verification result").
 - The vendor's API docs, if a real adapter is in scope.
