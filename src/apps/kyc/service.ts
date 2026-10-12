@@ -4,6 +4,7 @@ import { z } from "zod";
 import { approvals } from "@/platform/approvals";
 import { audit } from "@/platform/audit";
 import { getDb, type DbOrTx, type Tx } from "@/platform/db/client";
+import { parseDecision } from "@/platform/decisions";
 import { approvals as approvalsTable, users } from "@/platform/db/schema";
 import { NotFoundError, ValidationError } from "@/platform/errors";
 import { gridQuery, type GridParams, type GridSpec } from "@/platform/grid";
@@ -441,10 +442,12 @@ export async function proposeKycDecision(user: User | null, id: string, input: P
 export async function decideKycProposal(
   user: User | null,
   id: string,
-  decision: KycDecision,
+  /** Raw user input is fine: parsed strictly after authorization. */
+  rawDecision: unknown,
   reason?: string | null,
 ): Promise<KycCaseSummary> {
   const actor = await authorize(user, "kyc.decision.approve", { type: ENTITY, id });
+  const decision: KycDecision = parseDecision(rawDecision);
   const trimmed = reason?.trim() || null;
   if (decision === "reject" && !trimmed) throw new ValidationError("A reason is required to reject a proposal");
   return audit.change(actor, { action: `kyc.decision.${decision}`, entityType: ENTITY, entityId: id, reason: trimmed }, async (tx) => {

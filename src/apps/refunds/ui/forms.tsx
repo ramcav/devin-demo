@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef } from "react";
 import { createRefundAction, decideRefundAction, retryPaymentAction, type FormState } from "../actions";
 
 function Feedback({ state }: { state: FormState }) {
@@ -46,10 +46,12 @@ export function CreateRefundForm({ chargeId, card, maxLabel }: { chargeId: strin
 /** `isCreator` only changes the UI; the approvals engine still rejects self-approval server-side. */
 export function DecisionForm({ id, isCreator }: { id: string; isCreator: boolean }) {
   const [state, action, pending] = useActionState(decideRefundAction, {});
+  const decision = useRef<HTMLInputElement>(null);
   const disabled = pending || isCreator;
   return (
     <form action={action} className="max-w-md space-y-3 rounded border bg-white p-4">
       <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="decision" ref={decision} />
       <label className="block text-sm">
         Reason (required to reject)
         <input name="reason" className="mt-1 block w-full rounded border px-2 py-1" />
@@ -61,10 +63,10 @@ export function DecisionForm({ id, isCreator }: { id: string; isCreator: boolean
         </p>
       )}
       <div className="flex gap-2">
-        <button type="submit" name="decision" value="approve" disabled={disabled} className="rounded bg-green-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">
+        <button type="submit" onClick={() => (decision.current!.value = "approve")} disabled={disabled} className="rounded bg-green-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">
           Approve
         </button>
-        <button type="submit" name="decision" value="reject" disabled={disabled} className="rounded bg-red-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">
+        <button type="submit" onClick={() => (decision.current!.value = "reject")} disabled={disabled} className="rounded bg-red-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">
           Reject
         </button>
       </div>

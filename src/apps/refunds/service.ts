@@ -5,6 +5,7 @@ import { approvals, type ApprovalSubject } from "@/platform/approvals";
 import { audit } from "@/platform/audit";
 import { getDb, type DbOrTx, type Tx } from "@/platform/db/client";
 import { users } from "@/platform/db/schema";
+import { parseDecision } from "@/platform/decisions";
 import { ConflictError, NotFoundError, UpstreamError, ValidationError } from "@/platform/errors";
 import { formatMoney, maskCard } from "@/platform/format";
 import { gridQuery, type GridParams, type GridSpec } from "@/platform/grid";
@@ -119,10 +120,12 @@ export async function createRefund(user: User | null, input: unknown): Promise<R
 export async function decideRefund(
   user: User | null,
   id: string,
-  decision: RefundDecision,
+  /** Raw user input is fine: parsed strictly after authorization. */
+  rawDecision: unknown,
   reason?: string | null,
 ): Promise<RefundSummary> {
   const actor = await authorize(user, "refund.approve", { type: ENTITY, id });
+  const decision: RefundDecision = parseDecision(rawDecision);
   const trimmed = reason?.trim() || null;
   if (decision === "reject" && !trimmed) throw new ValidationError("A reason is required to reject a refund");
 

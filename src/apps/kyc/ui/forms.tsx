@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef } from "react";
 import {
   addKycNoteAction,
   claimKycCaseAction,
@@ -121,10 +121,12 @@ export function AddNoteForm({ id }: { id: string }) {
 /** `isProposer` only changes the UI; the approvals engine still rejects self-approval server-side. */
 export function DecideProposalForm({ id, isProposer }: { id: string; isProposer: boolean }) {
   const [state, action, pending] = useActionState(decideKycProposalAction, {});
+  const decision = useRef<HTMLInputElement>(null);
   const disabled = pending || isProposer;
   return (
     <form action={action} className="max-w-md space-y-3 rounded border bg-white p-4">
       <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="decision" ref={decision} />
       <label className="block text-sm">
         Reason (required to reject)
         <input name="reason" data-testid="kyc-decision-reason" className="mt-1 block w-full rounded border px-2 py-1" />
@@ -138,8 +140,7 @@ export function DecideProposalForm({ id, isProposer }: { id: string; isProposer:
       <div className="flex gap-2">
         <button
           type="submit"
-          name="decision"
-          value="approve"
+          onClick={() => (decision.current!.value = "approve")}
           disabled={disabled}
           data-testid="kyc-decision-approve"
           className="rounded bg-green-700 px-3 py-1.5 text-sm text-white disabled:opacity-50"
@@ -148,8 +149,7 @@ export function DecideProposalForm({ id, isProposer }: { id: string; isProposer:
         </button>
         <button
           type="submit"
-          name="decision"
-          value="reject"
+          onClick={() => (decision.current!.value = "reject")}
           disabled={disabled}
           data-testid="kyc-decision-reject"
           className="rounded bg-red-700 px-3 py-1.5 text-sm text-white disabled:opacity-50"
