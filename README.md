@@ -8,6 +8,7 @@ The approach: build one governed platform layer once (auth, role-based permissio
 - **How we build (rules for Devin):** [`.devin/knowledge.md`](.devin/knowledge.md)
 - **Recipe for every new app (Devin skill):** [`.devin/skills/new-internal-app/SKILL.md`](.devin/skills/new-internal-app/SKILL.md)
 - **Recipe for every new integration (Devin skill):** [`.devin/skills/new-integration/SKILL.md`](.devin/skills/new-integration/SKILL.md)
+- **Recorded Refunds walkthrough (Devin skill):** [`.devin/skills/refunds-browser-walkthrough/SKILL.md`](.devin/skills/refunds-browser-walkthrough/SKILL.md)
 - **How it was built:** [`BUILD_LOG.md`](BUILD_LOG.md)
 
 ## Run it
