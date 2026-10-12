@@ -43,8 +43,10 @@ export function CreateRefundForm({ chargeId, card, maxLabel }: { chargeId: strin
   );
 }
 
-export function DecisionForm({ id }: { id: string }) {
+/** `isCreator` only changes the UI; the approvals engine still rejects self-approval server-side. */
+export function DecisionForm({ id, isCreator }: { id: string; isCreator: boolean }) {
   const [state, action, pending] = useActionState(decideRefundAction, {});
+  const disabled = pending || isCreator;
   return (
     <form action={action} className="max-w-md space-y-3 rounded border bg-white p-4">
       <input type="hidden" name="id" value={id} />
@@ -53,11 +55,16 @@ export function DecisionForm({ id }: { id: string }) {
         <input name="reason" className="mt-1 block w-full rounded border px-2 py-1" />
       </label>
       <Feedback state={state} />
+      {isCreator && (
+        <p className="text-sm text-gray-600" data-testid="creator-note">
+          You raised this refund, so a different approver must approve it.
+        </p>
+      )}
       <div className="flex gap-2">
-        <button type="submit" name="decision" value="approve" disabled={pending} className="rounded bg-green-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">
+        <button type="submit" name="decision" value="approve" disabled={disabled} className="rounded bg-green-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">
           Approve
         </button>
-        <button type="submit" name="decision" value="reject" disabled={pending} className="rounded bg-red-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">
+        <button type="submit" name="decision" value="reject" disabled={disabled} className="rounded bg-red-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">
           Reject
         </button>
       </div>

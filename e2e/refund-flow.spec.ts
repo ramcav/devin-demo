@@ -26,9 +26,14 @@ test("$750 refund: self-approval blocked, two approvers, paid, fully audited", a
   await expect(page.getByTestId("refund-amount")).toHaveText("$750.00");
   await expect(page.getByTestId("refund-approvals")).toHaveText("0 of 2 required");
 
-  // A tries to approve their own refund: the approvals engine blocks it.
-  await page.getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByTestId("form-error")).toHaveText("You can't approve an item you created");
+  // A can't approve their own refund: the UI disables the buttons…
+  await expect(page.getByRole("button", { name: "Approve" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Reject" })).toBeDisabled();
+  await expect(page.getByTestId("creator-note")).toHaveText("You raised this refund, so a different approver must approve it.");
+  // …and the approvals engine still rejects the attempt server-side.
+  const selfApproval = await page.request.post(`/api/refunds/${refundId}/approve`, { data: {} });
+  expect(selfApproval.status()).toBe(403);
+  expect((await selfApproval.json()).error).toBe("approval_denied:self_approval");
   await page.reload();
   await expect(page.getByTestId("refund-status")).toHaveText("pending");
   await signOut(page);

@@ -80,7 +80,7 @@ export default async function RefundDetailPage({ params }: { params: Promise<{ i
       {r.status === "pending" && can(user, "refund.approve") && (
         <section>
           <h2 className="mb-2 font-medium">Your decision</h2>
-          <DecisionForm id={r.id} />
+          <DecisionForm id={r.id} isCreator={r.createdBy.id === user.id} />
         </section>
       )}
       {r.status === "payment_failed" && can(user, "refund.retry_payment") && <RetryPaymentForm id={r.id} />}
