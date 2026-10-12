@@ -388,10 +388,18 @@ describe("refunds", () => {
     });
 
     it("requires a valid from/to date range", async () => {
-      for (const q of ["", `from=${today}`, "from=2026-02-30&to=2026-03-01", "from=2026-03-02&to=2026-03-01", "from=03/01/2026&to=2026-03-02", "from=2026-03-01&to=2026-03-02&status=bogus"]) {
+      for (const q of ["", `from=${today}`, "from=2026-02-30&to=2026-03-01", "from=2026-03-02&to=2026-03-01", "from=03/01/2026&to=2026-03-02", "from=2026-03-01&to=2026-03-02&status=bogus", "from=2023-01-01&to=2024-01-02", "from=2020-01-01&to=2026-01-01"]) {
         const res = await download(users.auditor.id, q);
         expect(res.status, q).toBe(400);
       }
+    });
+
+    it("caps the range at 366 inclusive days", async () => {
+      expect((await download(users.auditor.id, "from=2024-01-01&to=2024-12-31")).status).toBe(200);
+      expect((await download(users.auditor.id, "from=2025-01-01&to=2026-01-01")).status).toBe(200);
+      const tooLong = await download(users.auditor.id, "from=2025-01-01&to=2026-01-02");
+      expect(tooLong.status).toBe(400);
+      expect(await tooLong.text()).toMatch(/at most 366 days/);
     });
   });
 });

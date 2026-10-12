@@ -380,6 +380,10 @@ export async function listChargesForRefund(user: User | null, params: GridParams
   };
 }
 
+const DAY_MS = 86_400_000;
+/** Inclusive day cap per export, so a full-history dump takes deliberate separate exports. */
+export const MAX_EXPORT_DAYS = 366;
+
 function isCalendarDay(day: string): boolean {
   const t = Date.parse(`${day}T00:00:00Z`);
   return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === day;
@@ -392,7 +396,11 @@ const exportInput = z
     status: z.enum(refundStatuses).optional(),
   })
   .refine((v) => isCalendarDay(v.from) && isCalendarDay(v.to), "invalid date")
-  .refine((v) => v.from <= v.to, "to must be on or after from");
+  .refine((v) => v.from <= v.to, "to must be on or after from")
+  .refine(
+    (v) => (Date.parse(v.to) - Date.parse(v.from)) / DAY_MS < MAX_EXPORT_DAYS,
+    `date range can be at most ${MAX_EXPORT_DAYS} days; export longer periods in separate files`,
+  );
 
 export type RefundExportFilters = z.infer<typeof exportInput>;
 
@@ -423,7 +431,7 @@ export async function exportRefunds(user: User | null, input: Record<string, str
   if (!parsed.success) throw new ValidationError(validationMessage(parsed.error));
   const filters = parsed.data;
   const start = new Date(`${filters.from}T00:00:00Z`);
-  const end = new Date(Date.parse(`${filters.to}T00:00:00Z`) + 86_400_000);
+  const end = new Date(Date.parse(`${filters.to}T00:00:00Z`) + DAY_MS);
 
   const conditions: SQL[] = [gte(refundRequests.createdAt, start), lt(refundRequests.createdAt, end)];
   if (filters.status) conditions.push(eq(refundRequests.status, filters.status));
