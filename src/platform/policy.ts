@@ -9,7 +9,17 @@ export type Action =
   | "refund.view"
   | "refund.create"
   | "refund.approve"
-  | "refund.retry_payment";
+  | "refund.retry_payment"
+  | "kyc.case.list"
+  | "kyc.case.view"
+  | "kyc.case.claim"
+  | "kyc.case.propose"
+  | "kyc.case.escalate"
+  | "kyc.note.add"
+  | "kyc.decision.approve"
+  | "kyc.escalation.decide"
+  | "kyc.escalation.view"
+  | "kyc.pii.view";
 
 export type Resource = { type: string; id?: string; ownerId?: string };
 
@@ -28,6 +38,18 @@ export const policy: Record<Action, Partial<Record<Role, Rule>>> = {
   "refund.create": { requester: true, approver: true },
   "refund.approve": { approver: true },
   "refund.retry_payment": { approver: true },
+
+  // KYC review queue
+  "kyc.case.list": { kyc_reviewer: true, compliance: true, auditor: true },
+  "kyc.case.view": { kyc_reviewer: true, compliance: true, auditor: true },
+  "kyc.case.claim": { kyc_reviewer: true, compliance: true },
+  "kyc.case.propose": { kyc_reviewer: true, compliance: true },
+  "kyc.case.escalate": { kyc_reviewer: true, compliance: true },
+  "kyc.note.add": { kyc_reviewer: true, compliance: true },
+  "kyc.decision.approve": { compliance: true },
+  "kyc.escalation.decide": { compliance: true },
+  "kyc.escalation.view": { compliance: true, auditor: true },
+  "kyc.pii.view": { compliance: true },
 };
 
 export function can(user: User | null, action: Action, resource?: Resource): boolean {

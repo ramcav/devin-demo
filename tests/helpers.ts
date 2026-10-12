@@ -20,7 +20,9 @@ export const users = {
   approverB: user("u_app_2"),
   approverC: user("u_app_3"),
   kycReviewer: user("u_kyc_1"),
+  kycReviewer2: user("u_kyc_2"),
   compliance: user("u_cmp_1"),
+  compliance2: user("u_cmp_2"),
   auditor: user("u_aud_1"),
   admin: user("u_adm_1"),
 };

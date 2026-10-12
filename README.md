@@ -43,8 +43,8 @@ npm run test:e2e                                # Playwright; reuses a server on
 | --- | --- | --- |
 | Rita Requester, Ravi Requester | `requester` | Create refund requests; see only their own |
 | Ana, Ben, Cleo Approver | `approver` | Create refunds and approve/reject other people's refunds |
-| Kim Reviewer, Kai Reviewer | `kyc_reviewer` | KYC app (not built yet) |
-| Cora Compliance | `compliance` | Audit page; KYC second approvals (later) |
+| Kim Reviewer, Kai Reviewer | `kyc_reviewer` | Claim and work KYC review cases; propose decisions; escalate to compliance |
+| Cora Compliance, Cyd Compliance | `compliance` | KYC second approvals and escalations; audit page |
 | Aldo Auditor | `auditor` | Read-only: every refund and the audit page |
 | Ada Admin | `admin` | Manage users and roles (no UI yet) |
 
@@ -61,6 +61,15 @@ Permissions live in one file, [`src/platform/policy.ts`](src/platform/policy.ts)
 ## Refunds app (`src/apps/refunds/`)
 
 Requester or approver picks a charge, enters amount and reason → `pending` → approvers approve/reject → when fully approved the platform calls the payments port and the refund becomes `paid` (or `payment_failed`, retryable by an approver with the same idempotency key). Refunds of $500 or less need 1 approval, over $500 need 2. The refundable balance counts pending, approved, paid and failed-payment refunds. Cards are only shown as `•••• 4242`; refunds always go to the charge's original payment method token.
+
+## KYC review queue (`src/apps/kyc/`)
+
+Reviewers (`kyc_reviewer`) and compliance work a queue of synthetic identity-verification cases. Flow: `new` → a reviewer **claims** the case → `in_review` → the assignee adds notes and **proposes** a decision → the case ends `approved` or `rejected`, or is **escalated** to compliance.
+
+- **Four-eyes rules:** proposing `reject` (any risk) or `approve` on a **high-risk** case inserts a pending decision; a *different* compliance officer must approve it through the maker-checker engine (`approvals.decide` — no self-approval, no double-deciding). Approving a low/medium-risk case completes directly. Compliance can reject a proposal with a reason, sending it back to the assignee to propose again.
+- **Escalation confidentiality:** the assignee can escalate an in-review case with a note. Only `compliance` (and `auditor`, read-only) can see that a case is escalated — everyone else sees it as `in_review` in SQL (`CASE WHEN status = 'escalated' THEN 'in_review' END`), so list filtering and sorting can't reveal it either. Non-compliance actors get the same generic `409 case_not_actionable` on an escalated case as on any case they can't work. Escalation notes, compliance notes written while escalated and pending `while_escalated` decisions are hidden from non-compliance roles.
+- **National ID masking:** the full synthetic `SYN…` national ID is selected only for `compliance` (`kyc.pii.view`); everyone else gets `•••• ` + last 4 computed in SQL — the full value is never loaded.
+- **Invariant coverage:** INV-1/INV-2 (engine self-approval and double-decision, incl. escalated cases) and INV-9 (state machine, one pending decision, send-back, no deciding completed direct approvals) are tested via the API in `tests/apps/kyc/kyc.test.ts`; INV-6 (one audit row per change, rollback on audit failure, no PII in audit payloads), INV-8 (role-based authorization on every route) and INV-10 (escalation visibility and masking) too. The happy path including escalation visibility and API-level self-approval is covered by `e2e/kyc-flow.spec.ts`.
 
 ## Integrations (ports and adapters)
 
