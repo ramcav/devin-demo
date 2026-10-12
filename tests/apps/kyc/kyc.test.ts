@@ -157,7 +157,7 @@ describe("KYC review queue", () => {
   });
 
   it("INV-9: compliance rejecting a proposal sends the case back to the assignee", async () => {
-    const row = await insertKycCase();
+    const row = await insertKycCase({ riskLevel: "high" });
     await claim(row.id, users.kycReviewer);
     await propose(row.id, users.kycReviewer, "reject", "Identity mismatch");
     expect((await decide(row.id, users.compliance, "reject")).status).toBe(400);
