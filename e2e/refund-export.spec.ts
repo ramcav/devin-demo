@@ -40,4 +40,11 @@ test("requesters can't export; the auditor downloads the refunds CSV", async ({ 
   const row = rows.find((r) => r.startsWith(`${refundId},`));
   expect(row).toContain(`,pending,12.34,USD,${reason},Rita Requester,,,`);
   expect(csv).not.toContain("pm_");
+
+  // The export status follows the grid filter, including after Clear.
+  await page.goto("/refunds?f_status=rejected");
+  await expect(form.getByLabel("Export status")).toHaveValue("rejected");
+  await page.getByRole("link", { name: "Clear" }).click();
+  await expect(page).toHaveURL(/\/refunds$/);
+  await expect(form.getByLabel("Export status")).toHaveValue("");
 });

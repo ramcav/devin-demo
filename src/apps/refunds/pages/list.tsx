@@ -30,7 +30,7 @@ export default async function RefundsListPage({ searchParams }: { searchParams: 
           </Link>
         )}
       </div>
-      {can(user, "refund.export") && <ExportForm status={params.filters.status} />}
+      {can(user, "refund.export") && <ExportForm key={params.filters.status ?? ""} status={params.filters.status} />}
       <DataGrid
         basePath="/refunds"
         params={params}
