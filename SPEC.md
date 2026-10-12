@@ -26,13 +26,13 @@ One command to run everything locally: `docker compose up`, then the app at http
 | Role | Can |
 | --- | --- |
 | `requester` | Create refund requests; view own requests |
-| `approver` | Approve or reject refunds created by someone else |
+| `approver` | Create refund requests, and approve or reject refunds created by someone else |
 | `kyc_reviewer` | Work KYC cases: claim, review, propose a decision |
 | `compliance` | Everything a KYC reviewer can, plus: second approval on KYC rejections and high-risk approvals, see escalations, see unmasked PII |
 | `auditor` | Read-only access to every app and the audit log |
 | `admin` | Manage users and roles |
 
-Seed at least: 2 requesters, 2 approvers, 2 KYC reviewers, 1 compliance officer, 1 auditor, 1 admin.
+Seed at least: 2 requesters, 3 approvers, 2 KYC reviewers, 2 compliance officers, 1 auditor, 1 admin. (Approvers can create refunds so the self-approval block is visible on a real maker; three approvers let a refund over $500 be raised by one and approved by the other two. The second compliance officer lets a rejection proposed by one officer be approved by another.)
 
 ## Platform layer (`src/platform/`)
 
@@ -98,4 +98,4 @@ This app is deliberately specified at the same level of detail a business owner 
 
 ## Out of scope
 
-Real SSO/MFA, encryption and key management, deployment, monitoring, OFAC screening, transaction monitoring, SAR filing, a real KYC vendor, data-retention jobs, feature-flag admin (would be another app on the same platform), and UI polish.
+Real SSO/MFA, encryption and key management, deployment, monitoring, OFAC screening, transaction monitoring, SAR filing, a real KYC vendor, data-retention jobs, feature-flag admin, and UI polish. Feature flags: if they are on/off switches, the admin panel is another app on this platform; if rollouts or targeting are needed, adopt a flag service behind a port rather than building one.

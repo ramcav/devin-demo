@@ -105,4 +105,8 @@ Domain operations: `listCharges`, `getCharge`, `issueRefund({ chargeId, amountCe
 - Mocked: identity provider (user picker), payment processor (in-repo simulated API), all data (synthetic).
 - Production would need: Entra ID/OIDC with MFA and group-to-role mapping, a real processor adapter with least-privilege restricted keys, secrets in a vault, the database role used by the app without `TRIGGER`/owner rights on `audit_log`, audit export to WORM storage, deployment and monitoring. Out of scope per [`SPEC.md`](SPEC.md).
 
+## Not built: feature-flag admin
+
+The third Power Apps tool is deliberately not in this prototype; the KYC app already shows what a new app on the platform costs. Recommendation: if flags today are on/off switches read from a table, build the admin panel on the platform (permissions, approvals and audit come with it). If the team wants percentage rollouts, targeting or experiments, don't build that part: adopt an open-source flag service (e.g. Unleash, via OpenFeature) behind a port, so flag changes still land in the audit log.
+
 All data in this repository is synthetic.
