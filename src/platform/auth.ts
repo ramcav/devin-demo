@@ -58,7 +58,7 @@ export async function nextCookieJar(): Promise<CookieJar> {
       store.set(name, value, {
         httpOnly: true,
         sameSite: "lax",
-        secure: process.env.NODE_ENV === "production" && process.env.INSECURE_COOKIES !== "1",
+        secure: process.env.NODE_ENV === "production",
         path: "/",
         maxAge: maxAgeSeconds,
       }),

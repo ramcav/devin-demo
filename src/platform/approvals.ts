@@ -1,5 +1,7 @@
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { DbOrTx, Tx } from "./db/client";
-import type { ApprovalDecision } from "./db/schema";
+import { approvals as approvalsTable, type ApprovalDecision } from "./db/schema";
+import { ApprovalDeniedError } from "./errors";
 import type { User } from "./ports/auth";
 
 export type ApprovalSubject = {
@@ -20,18 +22,51 @@ export type ApprovalState = {
   decisions: ApprovalRecord[];
 };
 
-async function decide(
-  _tx: Tx,
-  _subject: ApprovalSubject,
-  _approver: User,
-  _decision: ApprovalDecision,
-  _reason?: string | null,
-): Promise<ApprovalState> {
-  throw new Error("not implemented");
+async function state(db: DbOrTx, subject: ApprovalSubject): Promise<ApprovalState> {
+  const decisions = await db
+    .select({
+      approverId: approvalsTable.approverId,
+      decision: approvalsTable.decision,
+      reason: approvalsTable.reason,
+      at: approvalsTable.at,
+    })
+    .from(approvalsTable)
+    .where(and(eq(approvalsTable.entityType, subject.entityType), eq(approvalsTable.entityId, subject.entityId)))
+    .orderBy(asc(approvalsTable.at), asc(approvalsTable.id));
+  const approvals = new Set(decisions.filter((d) => d.decision === "approve").map((d) => d.approverId)).size;
+  const status: ApprovalStatus = decisions.some((d) => d.decision === "reject")
+    ? "rejected"
+    : approvals >= subject.requiredApprovals
+      ? "approved"
+      : "pending";
+  return { status, approvals, required: subject.requiredApprovals, decisions };
 }
 
-async function state(_db: DbOrTx, _subject: ApprovalSubject): Promise<ApprovalState> {
-  throw new Error("not implemented");
+/**
+ * Records one maker-checker decision. Callers authorize the approver and apply their own status change
+ * (from the returned state) in the same transaction.
+ */
+async function decide(
+  tx: Tx,
+  subject: ApprovalSubject,
+  approver: User,
+  decision: ApprovalDecision,
+  reason?: string | null,
+): Promise<ApprovalState> {
+  // Serialize decisions per item so concurrent approvals can't double count.
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${subject.entityType}:${subject.entityId}`}, 0))`);
+  const current = await state(tx, subject);
+  if (approver.id === subject.createdBy) throw new ApprovalDeniedError("self_approval");
+  if (current.decisions.some((d) => d.approverId === approver.id)) throw new ApprovalDeniedError("already_decided");
+  if (current.status !== "pending") throw new ApprovalDeniedError("not_pending");
+  await tx.insert(approvalsTable).values({
+    entityType: subject.entityType,
+    entityId: subject.entityId,
+    approverId: approver.id,
+    decision,
+    reason: reason ?? null,
+  });
+  return state(tx, subject);
 }
 
 export const approvals = { decide, state };
