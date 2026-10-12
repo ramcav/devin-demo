@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, asc, eq, gte, notInArray } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { POST as approveRoute } from "@/app/api/refunds/[id]/approve/route";
 import { GET as getRefundRoute } from "@/app/api/refunds/[id]/route";
@@ -24,6 +24,21 @@ async function refundRow(id: string) {
   return row;
 }
 
+const usedCharges = new Set<string>(Array.from({ length: 21 }, (_, i) => `ch_${String(i + 10).padStart(4, "0")}`));
+
+/** A charge no other test touches, large enough for the refund under test. */
+async function freshCharge(minCents: number): Promise<string> {
+  const [row] = await getDb()
+    .select({ id: charges.id })
+    .from(charges)
+    .where(and(gte(charges.amountCents, minCents), notInArray(charges.id, [...usedCharges]), eq(charges.currency, "USD")))
+    .orderBy(asc(charges.id))
+    .limit(1);
+  if (!row || row.id.startsWith("ch_sim")) throw new Error(`no unused charge >= ${minCents}`);
+  usedCharges.add(row.id);
+  return row.id;
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -31,7 +46,7 @@ afterEach(() => {
 describe("refunds", () => {
   describe("INV-3: approval thresholds", () => {
     it("INV-3: refunds over $500 stay pending until two distinct approvers approve", async () => {
-      const r = await createRefund(users.requester, { chargeId: "ch_0010", amountCents: 50_001, reason: "Damaged goods" });
+      const r = await createRefund(users.requester, { chargeId: await freshCharge(50_001), amountCents: 50_001, reason: "Damaged goods" });
       expect(r).toMatchObject({ status: "pending", requiredApprovals: 2 });
 
       expect((await decideRefund(users.approverA, r.id, "approve")).status).toBe("pending");
@@ -42,20 +57,20 @@ describe("refunds", () => {
     });
 
     it("INV-3: refunds of $500 or less need one approval", async () => {
-      const r = await createRefund(users.requester, { chargeId: "ch_0011", amountCents: 50_000, reason: "Late delivery" });
+      const r = await createRefund(users.requester, { chargeId: await freshCharge(50_000), amountCents: 50_000, reason: "Late delivery" });
       expect(r.requiredApprovals).toBe(1);
       expect((await decideRefund(users.approverA, r.id, "approve")).status).toBe("paid");
     });
 
     it("INV-3: one approver approving twice does not count as two approvals", async () => {
-      const r = await createRefund(users.requester, { chargeId: "ch_0012", amountCents: 75_000, reason: "Duplicate charge" });
+      const r = await createRefund(users.requester, { chargeId: await freshCharge(75_000), amountCents: 75_000, reason: "Duplicate charge" });
       await decideRefund(users.approverA, r.id, "approve");
       await expect(decideRefund(users.approverA, r.id, "approve")).rejects.toBeInstanceOf(ApprovalDeniedError);
       expect((await refundRow(r.id)).status).toBe("pending");
     });
 
     it("one rejection rejects the refund and requires a reason", async () => {
-      const r = await createRefund(users.requester, { chargeId: "ch_0013", amountCents: 75_000, reason: "Customer request" });
+      const r = await createRefund(users.requester, { chargeId: await freshCharge(75_000), amountCents: 75_000, reason: "Customer request" });
       await expect(decideRefund(users.approverA, r.id, "reject")).rejects.toBeInstanceOf(ValidationError);
       await decideRefund(users.approverA, r.id, "approve");
       expect((await decideRefund(users.approverB, r.id, "reject", "Not eligible")).status).toBe("rejected");
@@ -65,7 +80,7 @@ describe("refunds", () => {
 
   describe("INV-1 / INV-2 for refunds", () => {
     it("INV-1: an approver who created a refund can't approve it (approvals engine, via the API)", async () => {
-      const r = await createRefund(users.approverA, { chargeId: "ch_0014", amountCents: 75_000, reason: "Goodwill" });
+      const r = await createRefund(users.approverA, { chargeId: await freshCharge(75_000), amountCents: 75_000, reason: "Goodwill" });
       const res = await approveRoute(await apiRequest(`/api/refunds/${r.id}/approve`, { method: "POST", asUser: users.approverA.id, body: {} }), routeCtx({ id: r.id }));
       expect(res.status).toBe(403);
       expect(((await res.json()) as { error: string }).error).toBe("approval_denied:self_approval");
@@ -76,7 +91,7 @@ describe("refunds", () => {
     });
 
     it("INV-2: the same approver can't approve the same refund twice (via the API)", async () => {
-      const r = await createRefund(users.requester, { chargeId: "ch_0015", amountCents: 75_000, reason: "Goodwill" });
+      const r = await createRefund(users.requester, { chargeId: await freshCharge(75_000), amountCents: 75_000, reason: "Goodwill" });
       const call = async () =>
         approveRoute(await apiRequest(`/api/refunds/${r.id}/approve`, { method: "POST", asUser: users.approverB.id, body: {} }), routeCtx({ id: r.id }));
       expect((await call()).status).toBe(200);
@@ -201,7 +216,7 @@ describe("refunds", () => {
 
   describe("INV-6 for refunds", () => {
     it("INV-6: create, each approval and payment each write exactly one audit row", async () => {
-      const r = await createRefund(users.approverA, { chargeId: "ch_0026", amountCents: 75_000, reason: "Full trail" });
+      const r = await createRefund(users.approverA, { chargeId: await freshCharge(75_000), amountCents: 75_000, reason: "Full trail" });
       expect((await auditRowsFor(ENTITY, r.id)).map((x) => x.action)).toEqual(["refund.create"]);
       await decideRefund(users.approverB, r.id, "approve");
       expect((await auditRowsFor(ENTITY, r.id)).map((x) => x.action)).toEqual(["refund.create", "refund.approve"]);

@@ -1,8 +1,8 @@
 import { closeDb, getDb } from "../src/platform/db/client";
-import { seed } from "../src/platform/db/seed";
+import { seedAll } from "./seed-data";
 
 async function main() {
-  await seed(getDb());
+  await seedAll(getDb());
   console.log("seed applied");
   await closeDb();
 }

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, SQL, sql, type AnyColumn } from "drizzle-orm";
 
 export type FilterMode = "eq" | "contains";
 
@@ -54,12 +54,13 @@ function escapeLike(value: string): string {
 }
 
 /** Builds WHERE / ORDER BY / LIMIT / OFFSET for a server-side paged query. */
-export function gridQuery(params: GridParams, columns: Readonly<Record<string, AnyColumn>>, base?: SQL) {
+export function gridQuery(params: GridParams, columns: Readonly<Record<string, AnyColumn | SQL>>, base?: SQL) {
   const conditions: SQL[] = base ? [base] : [];
   for (const [key, value] of Object.entries(params.filters)) {
     const column = columns[key];
     if (!column) continue;
-    conditions.push(params.modes[key] === "contains" ? ilike(column, `%${escapeLike(value)}%`) : eq(column, value));
+    if (params.modes[key] === "contains") conditions.push(ilike(column, `%${escapeLike(value)}%`));
+    else conditions.push(column instanceof SQL ? sql`${column} = ${value}` : eq(column, value));
   }
   const sortColumn = columns[params.sort];
   if (!sortColumn) throw new Error(`Grid sort column not mapped: ${params.sort}`);

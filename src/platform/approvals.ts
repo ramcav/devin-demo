@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { DbOrTx, Tx } from "./db/client";
 import { approvals as approvalsTable, type ApprovalDecision } from "./db/schema";
 import { ApprovalDeniedError } from "./errors";
@@ -69,4 +69,15 @@ async function decide(
   return state(tx, subject);
 }
 
-export const approvals = { decide, state };
+/** Approval counts for many items of one type (list views). */
+async function counts(db: DbOrTx, entityType: string, entityIds: string[]): Promise<Map<string, number>> {
+  if (entityIds.length === 0) return new Map();
+  const rows = await db
+    .select({ entityId: approvalsTable.entityId, n: sql<number>`count(*)::int` })
+    .from(approvalsTable)
+    .where(and(eq(approvalsTable.entityType, entityType), inArray(approvalsTable.entityId, entityIds), eq(approvalsTable.decision, "approve")))
+    .groupBy(approvalsTable.entityId);
+  return new Map(rows.map((r) => [r.entityId, r.n]));
+}
+
+export const approvals = { decide, state, counts };

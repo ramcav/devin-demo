@@ -1,7 +1,7 @@
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { connect } from "../src/platform/db/client";
-import { seed } from "../src/platform/db/seed";
+import { seedAll } from "../scripts/seed-data";
 
 // Recreates the test database from scratch so every run starts clean (audit_log can't be truncated by design).
 export default async function setup() {
@@ -19,6 +19,6 @@ export default async function setup() {
 
   const { sql, db } = connect(url.toString());
   await migrate(db, { migrationsFolder: "./drizzle" });
-  await seed(db);
+  await seedAll(db);
   await sql.end();
 }

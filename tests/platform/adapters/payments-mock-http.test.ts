@@ -11,7 +11,7 @@ const routeFetch: typeof fetch = async (input, init) => {
   const req = new Request(input, init);
   const path = new URL(req.url).pathname.replace("/api/mock-payments", "");
   const handled = (async () => {
-    if (req.method === "GET" && path === "/charges") return listChargesRoute(req);
+    if (req.method === "GET" && path === "/charges") return listChargesRoute();
     const charge = path.match(/^\/charges\/([^/]+)$/);
     if (req.method === "GET" && charge) return getChargeRoute(req, { params: Promise.resolve({ id: charge[1]! }) });
     if (req.method === "POST" && path === "/refunds") return createRefundRoute(req);

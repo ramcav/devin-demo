@@ -5,6 +5,7 @@ export type AppEntry = { id: string; name: string; description: string; href: st
 
 /** Launcher registry. An app shows up for a user only if the policy grants its access action. */
 export const appRegistry: AppEntry[] = [
+  { id: "refunds", name: "Refunds", description: "Request and approve customer refunds (maker-checker)", href: "/refunds", access: "refund.list" },
   { id: "audit", name: "Audit log", description: "Read-only, filterable log of every change", href: "/audit", access: "audit.view" },
 ];
 

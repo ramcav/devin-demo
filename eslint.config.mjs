@@ -20,6 +20,11 @@ const config = [
       ],
     },
   },
+  {
+    // The simulated provider is the "external system" itself, so it may use its own implementation.
+    files: ["src/app/api/mock-payments/**"],
+    rules: { "no-restricted-imports": "off" },
+  },
 ];
 
 export default config;

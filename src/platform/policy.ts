@@ -2,15 +2,32 @@ import { audit } from "./audit";
 import { ForbiddenError, UnauthenticatedError } from "./errors";
 import type { Role, User } from "./ports/auth";
 
-export type Action = "audit.view";
+export type Action =
+  | "audit.view"
+  | "refund.list"
+  | "refund.view_all"
+  | "refund.view"
+  | "refund.create"
+  | "refund.approve"
+  | "refund.retry_payment";
 
 export type Resource = { type: string; id?: string; ownerId?: string };
 
 type Rule = true | ((user: User, resource: Resource | undefined) => boolean);
 
+const own: Rule = (user, resource) => resource?.ownerId === user.id;
+
 /** role → allowed actions. Anything not listed is denied. */
 export const policy: Record<Action, Partial<Record<Role, Rule>>> = {
   "audit.view": { auditor: true, compliance: true },
+
+  // Refunds
+  "refund.list": { requester: true, approver: true, auditor: true },
+  "refund.view_all": { approver: true, auditor: true },
+  "refund.view": { requester: own, approver: true, auditor: true },
+  "refund.create": { requester: true, approver: true },
+  "refund.approve": { approver: true },
+  "refund.retry_payment": { approver: true },
 };
 
 export function can(user: User | null, action: Action, resource?: Resource): boolean {

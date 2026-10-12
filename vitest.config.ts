@@ -16,7 +16,7 @@ export default defineConfig({
       TEST_DATABASE_URL: testDatabaseUrl,
       SESSION_SECRET: "test-session-secret-not-for-prod",
       AUTH_ADAPTER: "mock",
-      PAYMENTS_ADAPTER: "mock",
+      PAYMENTS_ADAPTER: "memory",
     },
   },
 });

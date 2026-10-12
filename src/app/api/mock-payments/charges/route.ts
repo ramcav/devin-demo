@@ -1,3 +1,12 @@
+import { mockPaymentsProvider } from "@/platform/adapters/payments/mock-provider";
+import { providerError } from "../respond";
+
+export const dynamic = "force-dynamic";
+
 export async function GET() {
-  return new Response("not implemented", { status: 501 });
+  try {
+    return Response.json({ object: "list", data: await mockPaymentsProvider().listCharges() });
+  } catch (err) {
+    return providerError(err);
+  }
 }

@@ -44,6 +44,13 @@ export class ConflictError extends AppError {
   }
 }
 
+export class UpstreamError extends AppError {
+  readonly status = 502;
+  constructor(message: string) {
+    super("upstream_unavailable", message);
+  }
+}
+
 export type ApprovalDenialReason = "self_approval" | "already_decided" | "not_pending";
 
 const denialMessages: Record<ApprovalDenialReason, string> = {
