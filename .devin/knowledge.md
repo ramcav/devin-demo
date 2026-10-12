@@ -10,7 +10,15 @@ Read this before every session in this repo. `SPEC.md` is the source of truth fo
 4. **The server is the source of truth.** Hiding a button is UX, not security. Every rule in `SPEC.md` is enforced server-side and covered by a test.
 5. **Synthetic data only.** No real names, IDs or card numbers. Cards are payment method tokens (`pm_…`) plus last4; never store or render a full card number.
 6. **Masking and confidentiality are enforced in the data layer**, not only in components: API responses for unauthorized roles must not contain unmasked national IDs or escalation data.
-7. **Talk to external systems only through typed clients** in `src/platform/integrations/`.
+7. **Talk to external systems only through ports** (see Architecture below), never by calling an API directly from app code.
+
+## Architecture
+
+- **Ports and adapters for anything external.** Auth, payments and (later) the KYC vendor sit behind an interface in `src/platform/ports/` with an adapter in `src/platform/adapters/`. Swapping mock auth for Entra ID, or the mock payments API for Stripe, touches one adapter, never app code.
+- **Modular apps.** Each app in `src/apps/<app>/` depends only on `src/platform/`. Apps never import from each other.
+- **Test first for rules.** For every invariant in `SPEC.md`, write the failing test before the implementation.
+- **Reuse before you write.** If two apps need the same thing, it belongs in the platform; don't copy it between apps.
+- **No speculative abstraction.** Build what the spec needs today; three similar lines beat a premature framework.
 
 ## Conventions
 

@@ -36,7 +36,7 @@ Seed at least: 2 requesters, 2 approvers, 2 KYC reviewers, 1 compliance officer,
 
 ## Platform layer (`src/platform/`)
 
-1. **Auth (mock).** A login page with a user picker that sets a signed session cookie. No passwords. Production would use Entra ID over OIDC; leave a clear seam (`getCurrentUser()`) so swapping the provider touches one module.
+1. **Auth (mock).** A login page with a user picker that sets a signed session cookie. No passwords. Production would use Entra ID over OIDC; auth sits behind the auth port (`getCurrentUser()`), so swapping the provider means writing one new adapter.
 2. **Policy (RBAC).** One file, `src/platform/policy.ts`, maps `role → allowed actions` (e.g. `refund.create`, `refund.approve`, `kyc.escalation.view`). Default deny. Every server action and route calls `authorize(user, action, resource?)` before doing anything. The UI hides buttons too, but the server is the source of truth.
 3. **Approvals engine.** Generic maker-checker: an entity has a `created_by`, a required number of approvals, and a list of approvals. Rules enforced server-side:
    - the creator can never approve their own item;
@@ -45,7 +45,7 @@ Seed at least: 2 requesters, 2 approvers, 2 KYC reviewers, 1 compliance officer,
    - one rejection rejects the item.
 4. **Audit log.** One `audit_log` table: `id, at, actor_id, actor_role, action, entity_type, entity_id, before (jsonb), after (jsonb), reason, request_id`. **Append-only, enforced in the database:** a trigger raises an error on `UPDATE` or `DELETE`. Apps never insert into it directly; they call `audit.record(...)` in the **same transaction** as the change it describes. If the audit write fails, the change rolls back.
 5. **Data grid.** A reusable table component with **server-side** pagination, sorting and filtering, so there's no row ceiling.
-6. **Integrations.** Typed API clients live in `src/platform/integrations/`. For this prototype: a mock payments provider (see Refunds).
+6. **Integrations (ports and adapters).** Each external system is an interface in `src/platform/ports/` with an adapter in `src/platform/adapters/`. For this prototype: an auth port with a mock adapter, and a payments port with a mock payments adapter (see Refunds).
 7. **App shell.** A launcher listing the apps the current user can access, and an **Audit** page (read-only, filterable) for the `auditor` and `compliance` roles.
 
 ## App 1: Refunds (`src/apps/refunds/`)
@@ -57,7 +57,7 @@ Seed at least: 2 requesters, 2 approvers, 2 KYC reviewers, 1 compliance officer,
   - refund amount must be > 0 and ≤ the original charge minus anything already refunded;
   - a refund always goes back to the **original payment method token**; there's no field to change the destination;
   - cards are only ever shown masked (`•••• 4242`).
-- **Mock payments provider:** a small in-repo module or route (`/api/mock-payments/...`) that serves seeded charges and accepts refunds. The app talks to it only through the typed client in `src/platform/integrations/payments.ts`.
+- **Mock payments provider:** a small in-repo module or route (`/api/mock-payments/...`) that serves seeded charges and accepts refunds. The app talks to it only through the payments port (`src/platform/ports/payments.ts`), implemented by the mock adapter.
 
 ## App 2: KYC review queue (`src/apps/kyc/`): build this with the playbook
 
