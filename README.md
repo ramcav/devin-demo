@@ -7,6 +7,7 @@ The approach: build one governed platform layer once (auth, role-based permissio
 - **What to build:** [`SPEC.md`](SPEC.md)
 - **How we build (rules for Devin):** [`.devin/knowledge.md`](.devin/knowledge.md)
 - **Recipe for every new app:** [`playbooks/new-internal-app.md`](playbooks/new-internal-app.md)
+- **Recipe for every new integration:** [`playbooks/new-integration.md`](playbooks/new-integration.md)
 - **How it was built:** [`BUILD_LOG.md`](BUILD_LOG.md)
 
 Setup instructions, the role list and what's mocked are added once the app is built.
