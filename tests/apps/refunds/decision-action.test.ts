@@ -61,6 +61,16 @@ describe("refunds decide action: strict decision parsing", () => {
     expect(await auditRowsFor("refund_request", refund.id)).toEqual([]);
   });
 
+  it.each([
+    ["unauthenticated", null, "Sign in required"],
+    ["unauthorized", "requester", "You are not allowed to do this"],
+  ] as const)("checks authorization before parsing the decision (%s)", async (_label, userKey, error) => {
+    const refund = await insertPendingRefund();
+    session.user = userKey ? users[userKey] : null;
+    const result = await decideRefundAction({}, form({ id: refund.id, decision: "approved" }));
+    expect(result).toEqual({ error });
+  });
+
   it("still accepts an exact decision", async () => {
     const refund = await insertPendingRefund();
     const result = await decideRefundAction({}, form({ id: refund.id, decision: "reject", reason: "Not eligible" }));

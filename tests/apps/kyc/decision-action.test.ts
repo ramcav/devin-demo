@@ -58,6 +58,16 @@ describe("KYC decide action: strict decision parsing", () => {
     expect(await auditRowsFor("kyc_case", id)).toEqual(auditBefore);
   });
 
+  it.each([
+    ["unauthenticated", null, "Sign in required"],
+    ["unauthorized", "kycReviewer", "You are not allowed to do this"],
+  ] as const)("checks authorization before parsing the decision (%s)", async (_label, userKey, error) => {
+    const { id } = await caseWithPendingProposal();
+    session.user = userKey ? users[userKey] : null;
+    const result = await decideKycProposalAction({}, form({ id: id, decision: "approved" }));
+    expect(result).toEqual({ error });
+  });
+
   it("still accepts an exact decision", async () => {
     const { id } = await caseWithPendingProposal();
     const result = await decideKycProposalAction({}, form({ id, decision: "approve" }));

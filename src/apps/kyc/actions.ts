@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { parseDecision } from "@/platform/decisions";
 import { runAction } from "@/platform/session";
 import { addKycNote, claimKycCase, decideKycProposal, escalateKycCase, proposeKycDecision, type KycDecision } from "./service";
 
@@ -43,7 +42,7 @@ export async function addKycNoteAction(_prev: FormState, formData: FormData): Pr
 
 export async function decideKycProposalAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const id = String(formData.get("id") ?? "");
-  const res = await runAction((user) => decideKycProposal(user, id, parseDecision(formData.get("decision")), String(formData.get("reason") ?? "")));
+  const res = await runAction((user) => decideKycProposal(user, id, formData.get("decision"), String(formData.get("reason") ?? "")));
   if (!res.ok) return { error: res.error };
   revalidatePath(`/kyc/${id}`);
   return { message: `Case is now ${res.value.status.replace("_", " ")}` };
