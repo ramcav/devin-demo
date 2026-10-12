@@ -1,0 +1,34 @@
+# https://docs.devin.ai/onboard-devin/environment-yaml
+# Commands run from the repo root.
+initialize:
+  - name: Node 22 (matches CI and the Dockerfile)
+    run: |
+      source ~/.nvm/nvm.sh
+      nvm install 22
+      nvm alias default 22
+
+maintenance:
+  - name: npm dependencies and the Playwright browser
+    run: |
+      source ~/.nvm/nvm.sh
+      nvm use 22
+      npm install
+      npx playwright install chromium
+
+knowledge:
+  - name: startup
+    contents: |
+      docker compose up -d --build   # Postgres 16 on :5432 + app on http://localhost:3000 (migrates + seeds on start)
+      docker compose up -d db        # Postgres only, for tests or `npm run dev`
+  - name: lint
+    contents: |
+      npm run lint && npm run typecheck
+  - name: test
+    contents: |
+      docker compose up -d db && npm test   # Vitest drops/recreates the app_test database on every run
+  - name: e2e
+    contents: |
+      npm run test:e2e   # Playwright; reuses the app on :3000 (docker compose up) or starts `npm start`
+  - name: notes
+    contents: |
+      Read .devin/knowledge.md and SPEC.md first. Run `npm run lint && npm run typecheck && npm test` before opening a PR.
