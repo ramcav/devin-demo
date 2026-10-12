@@ -10,6 +10,7 @@ export const seedUsers: { id: string; name: string; email: string; role: Role }[
   { id: "u_kyc_1", name: "Kim Reviewer", email: "kim@example.test", role: "kyc_reviewer" },
   { id: "u_kyc_2", name: "Kai Reviewer", email: "kai@example.test", role: "kyc_reviewer" },
   { id: "u_cmp_1", name: "Cora Compliance", email: "cora@example.test", role: "compliance" },
+  { id: "u_cmp_2", name: "Cyd Compliance", email: "cyd@example.test", role: "compliance" },
   { id: "u_aud_1", name: "Aldo Auditor", email: "aldo@example.test", role: "auditor" },
   { id: "u_adm_1", name: "Ada Admin", email: "ada@example.test", role: "admin" },
 ];

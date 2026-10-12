@@ -29,6 +29,13 @@
       "when": 1791841403993,
       "tag": "0003_refunds_and_mock_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791843617906,
+      "tag": "0004_kyc",
+      "breakpoints": true
     }
   ]
 }

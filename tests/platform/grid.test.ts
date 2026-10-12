@@ -32,7 +32,7 @@ describe("data grid query", () => {
     const page1 = await run({});
     const page2 = await run({ page: "2" });
     expect(page1.rows).toHaveLength(3);
-    expect(page1.total).toBe(10);
+    expect(page1.total).toBe(11);
     expect(page2.rows[0]!.name > page1.rows[2]!.name).toBe(true);
 
     const approvers = await run({ f_role: "approver", sort: "name", dir: "desc" });
