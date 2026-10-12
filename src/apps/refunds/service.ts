@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, ne, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { approvals, type ApprovalSubject } from "@/platform/approvals";
 import { audit } from "@/platform/audit";
@@ -378,4 +378,111 @@ export async function listChargesForRefund(user: User | null, params: GridParams
     rows: rows.map(({ last4, createdAt, ...r }) => ({ ...r, card: maskCard(last4), createdAt: createdAt.toISOString() })),
     total,
   };
+}
+
+const DAY_MS = 86_400_000;
+/** Inclusive day cap per export, so a full-history dump takes deliberate separate exports. */
+export const MAX_EXPORT_DAYS = 366;
+
+function isCalendarDay(day: string): boolean {
+  const t = Date.parse(`${day}T00:00:00Z`);
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === day;
+}
+
+const exportInput = z
+  .object({
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "from must be a date (YYYY-MM-DD)"),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "to must be a date (YYYY-MM-DD)"),
+    status: z.enum(refundStatuses).optional(),
+  })
+  .refine((v) => isCalendarDay(v.from) && isCalendarDay(v.to), "invalid date")
+  .refine((v) => v.from <= v.to, "to must be on or after from")
+  .refine(
+    (v) => (Date.parse(v.to) - Date.parse(v.from)) / DAY_MS < MAX_EXPORT_DAYS,
+    `date range can be at most ${MAX_EXPORT_DAYS} days; export longer periods in separate files`,
+  );
+
+export type RefundExportFilters = z.infer<typeof exportInput>;
+
+export const refundExportHeader = [
+  "refund_id",
+  "created_at",
+  "paid_at",
+  "status",
+  "amount",
+  "currency",
+  "reason",
+  "requested_by",
+  "approved_by",
+  "rejected_by",
+  "charge_id",
+  "provider_refund_id",
+] as const;
+
+export type RefundExport = { filters: RefundExportFilters; header: readonly string[]; rows: (string | null)[][] };
+
+/**
+ * All refunds created in [from, to] (UTC days), optionally one status, for month-end close.
+ * The export itself is audited (`refund.exported`, filters + row count only) in the same transaction as the read.
+ */
+export async function exportRefunds(user: User | null, input: Record<string, string | undefined>): Promise<RefundExport> {
+  const actor = await authorize(user, "refund.export");
+  const parsed = exportInput.safeParse({ from: input.from, to: input.to, status: input.status || undefined });
+  if (!parsed.success) throw new ValidationError(validationMessage(parsed.error));
+  const filters = parsed.data;
+  const start = new Date(`${filters.from}T00:00:00Z`);
+  const end = new Date(Date.parse(`${filters.to}T00:00:00Z`) + DAY_MS);
+
+  const conditions: SQL[] = [gte(refundRequests.createdAt, start), lt(refundRequests.createdAt, end)];
+  if (filters.status) conditions.push(eq(refundRequests.status, filters.status));
+  const deciders = (decision: "approve" | "reject") =>
+    sql<string | null>`(select string_agg(u.name, '; ' order by a.at, a.id) from approvals a join users u on u.id = a.approver_id
+      where a.entity_type = ${ENTITY} and a.entity_id = ${refundRequests.id} and a.decision = ${decision})`;
+
+  return getDb().transaction(async (tx) => {
+    const rows = await tx
+      .select({
+        id: refundRequests.id,
+        createdAt: refundRequests.createdAt,
+        paidAt: refundRequests.paidAt,
+        status: refundRequests.status,
+        amountCents: refundRequests.amountCents,
+        currency: refundRequests.currency,
+        reason: refundRequests.reason,
+        requestedBy: users.name,
+        approvedBy: deciders("approve"),
+        rejectedBy: deciders("reject"),
+        chargeId: refundRequests.chargeId,
+        providerRefundId: refundRequests.providerRefundId,
+      })
+      .from(refundRequests)
+      .innerJoin(users, eq(users.id, refundRequests.createdBy))
+      .where(and(...conditions))
+      .orderBy(refundRequests.createdAt, refundRequests.id);
+    await audit.record(tx, {
+      actor,
+      action: "refund.exported",
+      entityType: "refund_export",
+      entityId: `rx_${randomUUID()}`,
+      after: { ...filters, rowCount: rows.length },
+    });
+    return {
+      filters,
+      header: refundExportHeader,
+      rows: rows.map((r) => [
+        r.id,
+        r.createdAt.toISOString(),
+        r.paidAt?.toISOString() ?? null,
+        r.status,
+        (r.amountCents / 100).toFixed(2),
+        r.currency,
+        r.reason,
+        r.requestedBy,
+        r.approvedBy,
+        r.rejectedBy,
+        r.chargeId,
+        r.providerRefundId,
+      ]),
+    };
+  });
 }

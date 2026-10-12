@@ -10,6 +10,7 @@ export type Action =
   | "refund.create"
   | "refund.approve"
   | "refund.retry_payment"
+  | "refund.export"
   | "kyc.case.list"
   | "kyc.case.view"
   | "kyc.case.claim"
@@ -38,6 +39,7 @@ export const policy: Record<Action, Partial<Record<Role, Rule>>> = {
   "refund.create": { requester: true, approver: true },
   "refund.approve": { approver: true },
   "refund.retry_payment": { approver: true },
+  "refund.export": { approver: true, auditor: true },
 
   // KYC review queue
   "kyc.case.list": { kyc_reviewer: true, compliance: true, auditor: true },
